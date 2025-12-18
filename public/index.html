@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Berkshire Hathaway RAG API</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
+    h1 { color: #333; }
+    code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+    pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>Berkshire Hathaway RAG API</h1>
+  <p>Query endpoint for Berkshire Hathaway shareholder letters (1977-2024).</p>
+  
+  <h2>Usage</h2>
+  <pre>GET /api/query?q=your+question+here</pre>
+  
+  <h2>Example</h2>
+  <pre>GET /api/query?q=what+is+Warren+Buffett's+investment+philosophy</pre>
+  
+  <h2>Try it</h2>
+  <form id="queryForm">
+    <input type="text" id="queryInput" placeholder="Ask about Berkshire Hathaway..." style="width: 70%; padding: 8px;" />
+    <button type="submit" style="padding: 8px 16px;">Query</button>
+  </form>
+  <pre id="results" style="margin-top: 20px; display: none;"></pre>
+
+  <script>
+    document.getElementById('queryForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const q = document.getElementById('queryInput').value;
+      const resultsEl = document.getElementById('results');
+      resultsEl.textContent = 'Loading...';
+      resultsEl.style.display = 'block';
+      
+      try {
+        const res = await fetch(`/api/query?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        resultsEl.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        resultsEl.textContent = 'Error: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>
