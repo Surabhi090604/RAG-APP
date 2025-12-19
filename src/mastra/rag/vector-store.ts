@@ -1,10 +1,16 @@
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { Document } from '@langchain/core/documents';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export type BerkshireDocument = {
   content: string;
   metadata?: Record<string, any>;
 };
+
+// Define path for persistence
+const DATA_DIR = path.join(process.cwd(), 'data');
+export const VECTORS_FILE = path.join(DATA_DIR, 'vectors.json');
 
 /**
  * Simple in-memory vector store implementation
@@ -21,13 +27,25 @@ class SimpleMemoryVectorStore {
   async addDocuments(documents: Document[]): Promise<void> {
     if (documents.length === 0) return;
 
-    const texts = documents.map(d => d.pageContent);
-    // Batch embedding might hit limits, but for this scale it's likely fine.
-    // If needed, we could chunk this.
-    const embeddings = await this.embeddings.embedDocuments(texts);
+    // Batch processing to avoid token limits
+    const BATCH_SIZE = 50;
 
-    for (let i = 0; i < documents.length; i++) {
-      this.docs.push({ doc: documents[i], embedding: embeddings[i] });
+    for (let i = 0; i < documents.length; i += BATCH_SIZE) {
+      const batch = documents.slice(i, i + BATCH_SIZE);
+      const texts = batch.map(d => d.pageContent);
+
+      try {
+        const embeddings = await this.embeddings.embedDocuments(texts);
+
+        for (let j = 0; j < batch.length; j++) {
+          this.docs.push({ doc: batch[j], embedding: embeddings[j] });
+        }
+        console.log(`Embedded and stored documents ${i + 1} to ${Math.min(i + BATCH_SIZE, documents.length)}`);
+      } catch (err) {
+        console.error(`Failed to embed batch ${i / BATCH_SIZE + 1}:`, err);
+        // Decide whether to throw or continue. Throwing is safer for data integrity.
+        throw err;
+      }
     }
   }
 
@@ -72,6 +90,30 @@ class SimpleMemoryVectorStore {
     // But to be safe:
     return dot / (Math.sqrt(normA) * Math.sqrt(normB));
   }
+
+  // Persistence methods
+  saveToFile(filePath: string) {
+    if (!fs.existsSync(path.dirname(filePath))) {
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    }
+    const data = JSON.stringify(this.docs);
+    fs.writeFileSync(filePath, data, 'utf-8');
+    console.log(`Saved ${this.docs.length} vectors to ${filePath}`);
+  }
+
+  loadFromFile(filePath: string) {
+    if (fs.existsSync(filePath)) {
+      try {
+        const data = fs.readFileSync(filePath, 'utf-8');
+        this.docs = JSON.parse(data);
+        console.log(`Loaded ${this.docs.length} vectors from ${filePath}`);
+        return true;
+      } catch (err) {
+        console.error('Failed to load vectors:', err);
+      }
+    }
+    return false;
+  }
 }
 
 /**
@@ -86,6 +128,9 @@ export class BerkshireVectorStore {
       model: 'text-embedding-3-small',
     });
     this.store = new SimpleMemoryVectorStore(this.embeddings);
+
+    // Try to auto-load on init
+    this.store.loadFromFile(VECTORS_FILE);
   }
 
   /**
@@ -112,6 +157,10 @@ export class BerkshireVectorStore {
 
       await this.store.addDocuments(allChunks);
       console.log(`✓ Successfully added ${allChunks.length} chunks from ${documents.length} documents`);
+
+      // Auto-save after adding
+      this.store.saveToFile(VECTORS_FILE);
+
     } catch (error) {
       console.error('Error adding documents to vector store:', error);
       throw error;
@@ -157,6 +206,10 @@ export class BerkshireVectorStore {
   async clearIndex(): Promise<void> {
     console.log('Clearing vector store...');
     this.store = new SimpleMemoryVectorStore(this.embeddings);
+    // Clear file too
+    if (fs.existsSync(VECTORS_FILE)) {
+      fs.unlinkSync(VECTORS_FILE);
+    }
     console.log('✓ Vector store cleared');
   }
 }
