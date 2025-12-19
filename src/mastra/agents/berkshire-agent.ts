@@ -1,4 +1,5 @@
 import { Agent } from '@mastra/core/agent';
+import { Memory } from '@mastra/memory';
 import { z } from 'zod';
 import { berkshireVectorStore } from '../rag';
 
@@ -25,6 +26,9 @@ Remember: You're helping people understand Buffett's wisdom, not giving personal
 
   // Use Mastra's model shorthand to resolve the provider
   model: 'openai/gpt-4o',
+
+  // Enable memory so conversations persist
+  memory: new Memory(),
 
   // Before generating a response, retrieve relevant context
   beforeGenerate: async ({ prompt }) => {
