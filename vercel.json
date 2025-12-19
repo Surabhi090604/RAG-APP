@@ -2,6 +2,13 @@
   "version": 2,
   "buildCommand": "echo 'No build needed for API routes'",
   "outputDirectory": "public",
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "destination": "http://153.92.209.75:4111/$1",
+      "permanent": false
+    }
+  ],
   "functions": {
     "api/*.ts": {
       "includeFiles": "data/**"
