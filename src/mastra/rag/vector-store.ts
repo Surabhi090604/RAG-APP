@@ -1,7 +1,5 @@
-import { MemoryVectorStore } from 'langchain/vectorstores/memory';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { Document } from '@langchain/core/documents';
-import { CHUNK_CONFIG } from './pdf-ingestion.js';
 
 export type BerkshireDocument = {
   content: string;
@@ -9,18 +7,85 @@ export type BerkshireDocument = {
 };
 
 /**
+ * Simple in-memory vector store implementation
+ * Replaces langchain/vectorstores/memory to avoid build/bundling issues
+ */
+class SimpleMemoryVectorStore {
+  private docs: { doc: Document; embedding: number[] }[] = [];
+  private embeddings: OpenAIEmbeddings;
+
+  constructor(embeddings: OpenAIEmbeddings) {
+    this.embeddings = embeddings;
+  }
+
+  async addDocuments(documents: Document[]): Promise<void> {
+    if (documents.length === 0) return;
+
+    const texts = documents.map(d => d.pageContent);
+    // Batch embedding might hit limits, but for this scale it's likely fine.
+    // If needed, we could chunk this.
+    const embeddings = await this.embeddings.embedDocuments(texts);
+
+    for (let i = 0; i < documents.length; i++) {
+      this.docs.push({ doc: documents[i], embedding: embeddings[i] });
+    }
+  }
+
+  async similaritySearch(
+    query: string,
+    k: number = 4,
+    filter?: Record<string, any>
+  ): Promise<Document[]> {
+    const queryEmbedding = await this.embeddings.embedQuery(query);
+
+    // Calculate similarities
+    const results = this.docs
+      .map(item => {
+        // Filter check
+        if (filter) {
+          const match = Object.entries(filter).every(([key, val]) => item.doc.metadata[key] === val);
+          if (!match) return null;
+        }
+
+        return {
+          doc: item.doc,
+          score: this.cosineSimilarity(queryEmbedding, item.embedding)
+        };
+      })
+      .filter((item): item is { doc: Document; score: number } => item !== null)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, k);
+
+    return results.map(r => r.doc);
+  }
+
+  private cosineSimilarity(a: number[], b: number[]): number {
+    let dot = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    // OpenAI embeddings are normalized, so norms should be ~1
+    // But to be safe:
+    return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+}
+
+/**
  * Vector store for Berkshire Hathaway letters
- * Uses LangChain's MemoryVectorStore with OpenAI embeddings
  */
 export class BerkshireVectorStore {
-  private store: MemoryVectorStore;
+  private store: SimpleMemoryVectorStore;
   private embeddings: OpenAIEmbeddings;
 
   constructor() {
     this.embeddings = new OpenAIEmbeddings({
       model: 'text-embedding-3-small',
     });
-    this.store = new MemoryVectorStore(this.embeddings);
+    this.store = new SimpleMemoryVectorStore(this.embeddings);
   }
 
   /**
@@ -51,22 +116,6 @@ export class BerkshireVectorStore {
       console.error('Error adding documents to vector store:', error);
       throw error;
     }
-  }
-
-  /**
-   * Simple text chunking with overlap
-   */
-  private chunkText(text: string, chunkSize: number, overlap: number): string[] {
-    const chunks: string[] = [];
-    let start = 0;
-
-    while (start < text.length) {
-      const end = Math.min(start + chunkSize, text.length);
-      chunks.push(text.slice(start, end));
-      start += chunkSize - overlap;
-    }
-
-    return chunks.filter(c => c.trim().length > 0);
   }
 
   /**
@@ -107,7 +156,7 @@ export class BerkshireVectorStore {
    */
   async clearIndex(): Promise<void> {
     console.log('Clearing vector store...');
-    this.store = new MemoryVectorStore(this.embeddings);
+    this.store = new SimpleMemoryVectorStore(this.embeddings);
     console.log('✓ Vector store cleared');
   }
 }
