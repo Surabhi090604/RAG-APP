@@ -30,23 +30,19 @@ export class BerkshireVectorStore {
   async addDocuments(documents: BerkshireDocument[]): Promise<void> {
     console.log(`Adding ${documents.length} documents to vector store...`);
     try {
-      // Chunk each document
       const allChunks: Document[] = [];
-      
-      for (const doc of documents) {
-        const chunks = this.chunkText(doc.content, CHUNK_CONFIG.chunkSize, CHUNK_CONFIG.chunkOverlap);
-        chunks.forEach((chunk, idx) => {
-          allChunks.push(
-            new Document({
-              pageContent: chunk,
-              metadata: {
-                ...doc.metadata,
-                chunkIndex: idx,
-                totalChunks: chunks.length,
-              },
-            })
-          );
-        });
+
+      for (const [idx, doc] of documents.entries()) {
+        allChunks.push(
+          new Document({
+            pageContent: doc.content,
+            metadata: {
+              ...doc.metadata,
+              // If not already set by ingest, provide sensible defaults
+              chunkIndex: doc.metadata?.chunkIndex ?? idx,
+            },
+          })
+        );
       }
 
       await this.store.addDocuments(allChunks);
@@ -63,13 +59,13 @@ export class BerkshireVectorStore {
   private chunkText(text: string, chunkSize: number, overlap: number): string[] {
     const chunks: string[] = [];
     let start = 0;
-    
+
     while (start < text.length) {
       const end = Math.min(start + chunkSize, text.length);
       chunks.push(text.slice(start, end));
       start += chunkSize - overlap;
     }
-    
+
     return chunks.filter(c => c.trim().length > 0);
   }
 

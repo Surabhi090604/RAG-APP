@@ -34,7 +34,9 @@
   "devDependencies": {
     "@types/node": "^25.0.2",
     "@vercel/node": "^5.5.15",
+    "dotenv": "^17.2.3",
     "mastra": "^0.18.8",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }

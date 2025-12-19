@@ -24,22 +24,22 @@ When answering questions:
 Remember: You're helping people understand Buffett's wisdom, not giving personal financial advice.`,
 
   // Use Mastra's model shorthand to resolve the provider
-  model: 'openai/gpt-4o-mini',
+  model: 'openai/gpt-4o',
 
   // Before generating a response, retrieve relevant context
   beforeGenerate: async ({ prompt }) => {
     console.log(`🔍 Searching shareholder letters for: "${prompt}"`);
-    
+
     try {
       // Query the vector store for relevant passages
       const results = await berkshireVectorStore.query(prompt, 5);
-      
+
       if (results.length === 0) {
         return {
           context: 'No relevant information found in shareholder letters. The database may not be initialized yet.'
         };
       }
-      
+
       // Format the results as context
       const context = results
         .map((doc, i) => {
@@ -48,9 +48,9 @@ Remember: You're helping people understand Buffett's wisdom, not giving personal
           return `[${year} Letter, Passage ${i + 1}]:\n${content}`;
         })
         .join('\n\n---\n\n');
-      
+
       console.log(`✓ Found ${results.length} relevant passages`);
-      
+
       return {
         context: `Here are relevant passages from Berkshire Hathaway shareholder letters:\n\n${context}\n\nPlease answer the question based on this context.`
       };
@@ -69,17 +69,17 @@ Remember: You're helping people understand Buffett's wisdom, not giving personal
 export const queryLettersTool = {
   name: 'query_berkshire_letters',
   description: 'Search through Warren Buffett\'s shareholder letters for specific information',
-  
+
   parameters: z.object({
     query: z.string().describe('The question or topic to search for in the letters'),
     topK: z.number().optional().default(5).describe('Number of relevant passages to retrieve'),
   }),
-  
+
   execute: async ({ query, topK = 5 }: { query: string; topK?: number }) => {
     console.log(`Searching letters: "${query}"`);
-    
+
     const results = await berkshireVectorStore.query(query, topK);
-    
+
     return {
       found: results.length,
       passages: results.map(doc => ({
@@ -97,18 +97,18 @@ export const queryLettersTool = {
 export const queryByYearTool = {
   name: 'query_by_year',
   description: 'Search a specific year\'s shareholder letter',
-  
+
   parameters: z.object({
     query: z.string().describe('The question or topic to search for'),
     year: z.number().describe('The year of the letter to search'),
     topK: z.number().optional().default(5).describe('Number of passages to retrieve'),
   }),
-  
+
   execute: async ({ query, year, topK = 5 }: { query: string; year: number; topK?: number }) => {
     console.log(`Searching ${year} letter: "${query}"`);
-    
+
     const results = await berkshireVectorStore.queryByYear(query, year, topK);
-    
+
     return {
       year,
       found: results.length,

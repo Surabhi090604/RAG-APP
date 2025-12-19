@@ -8,6 +8,7 @@
  *   npm.cmd run query      - Run example queries
  */
 
+import 'dotenv/config';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readdir } from 'fs/promises';
